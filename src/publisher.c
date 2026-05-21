@@ -6,10 +6,11 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Sleep abstraction — Vita uses ksceKernelDelayThread, host uses sleep(). */
-#ifdef PSVITA_KERNEL_BUILD
-  #include <psp2kern/kernel/threadmgr.h>
-  static void sleep_seconds(unsigned s) { ksceKernelDelayThread(s * 1000000); }
+/* Sleep abstraction — Vita uses sceKernelDelayThread (user-mode),
+ * host uses POSIX sleep(). */
+#ifdef PSVITA_BUILD
+  #include <psp2/kernel/threadmgr.h>
+  static void sleep_seconds(unsigned s) { sceKernelDelayThread(s * 1000000); }
 #else
   #include <unistd.h>
   static void sleep_seconds(unsigned s) { sleep(s); }

@@ -48,7 +48,7 @@ int config_parse_json(const char *json, mqtt_config *out) {
 
 /* Host implementation of config_load_from_path. The Vita variant lives
  * in src/config_vita.c (added in Task 15 when module_start needs it). */
-#ifndef PSVITA_KERNEL_BUILD
+#ifndef PSVITA_BUILD
 int config_load_from_path(const char *path, mqtt_config *out) {
     FILE *f = fopen(path, "rb");
     if (!f) return -1;

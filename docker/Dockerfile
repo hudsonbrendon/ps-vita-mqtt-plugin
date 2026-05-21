@@ -1,4 +1,4 @@
-FROM vitasdk/vitasdk:latest
+FROM --platform=linux/amd64 vitasdk/vitasdk:latest
 
 # vitasdk base already ships arm-vita-eabi-gcc, vita-mksfoex, vita-make-fself,
 # vita-elf-create, vita-pack-vpk in /usr/local/vitasdk/bin.
