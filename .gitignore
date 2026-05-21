@@ -1,0 +1,13 @@
+build/
+*.o
+*.elf
+*.velf
+*.self
+*.suprx
+*.skprx
+*.sfo
+*.vpk
+.vscode/
+.idea/
+host-tests
+*.dSYM/

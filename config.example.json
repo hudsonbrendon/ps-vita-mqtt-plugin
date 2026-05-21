@@ -1,0 +1,11 @@
+{
+  "broker_host": "192.168.1.10",
+  "broker_port": 1883,
+  "username": "",
+  "password": "",
+  "client_id": "psvita-livingroom",
+  "device_name": "PS Vita",
+  "topic_prefix": "psvita",
+  "discovery_prefix": "homeassistant",
+  "poll_interval_sec": 5
+}
