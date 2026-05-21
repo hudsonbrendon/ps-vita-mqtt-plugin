@@ -1,0 +1,43 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build deps
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+      - name: Host tests
+        run: make host-tests
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: host-tests
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build deps + netcat
+        run: sudo apt-get update && sudo apt-get install -y build-essential netcat-openbsd
+      - name: Run integration test
+        run: bash tests/integration/run_integration.sh
+
+  suprx:
+    runs-on: ubuntu-latest
+    needs: host-tests
+    container: vitasdk/vitasdk:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build .suprx
+        run: |
+          apk add --no-cache make bash
+          make suprx
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps-vita-mqtt-suprx
+          path: build/ps-vita-mqtt.suprx
