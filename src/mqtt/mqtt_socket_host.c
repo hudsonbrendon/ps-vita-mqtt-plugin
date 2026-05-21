@@ -25,6 +25,7 @@ mqtt_socket *mqtt_socket_open(const char *host, uint16_t port) {
     }
     freeaddrinfo(res);
     mqtt_socket *s = malloc(sizeof *s);
+    if (!s) { close(fd); return NULL; }
     s->fd = fd;
     return s;
 }

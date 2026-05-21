@@ -29,10 +29,15 @@ mqtt_client *mqtt_client_open(const mqtt_client_config *cfg) {
         return NULL;
     }
 
-    /* Read CONNACK: expect 4 bytes 0x20 0x02 0x00 0x00 */
+    /* Read CONNACK: expect exactly 4 bytes:
+     *   ack[0] = 0x20 (CONNACK type),
+     *   ack[1] = 0x02 (remaining length),
+     *   ack[2] = session-present byte, only bit 0 may be set,
+     *   ack[3] = return code, 0x00 = accepted. */
     uint8_t ack[4];
     int got = mqtt_socket_recv(s, ack, sizeof ack);
-    if (got != 4 || ack[0] != 0x20 || ack[3] != 0x00) {
+    if (got != 4 || ack[0] != 0x20 || ack[1] != 0x02
+                 || (ack[2] & 0xFE) != 0x00 || ack[3] != 0x00) {
         LOGE("CONNACK rejected (got=%d code=0x%02x)",
              got, got >= 4 ? ack[3] : -1);
         mqtt_socket_close(s);

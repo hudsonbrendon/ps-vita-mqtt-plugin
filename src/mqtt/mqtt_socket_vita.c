@@ -3,6 +3,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* SO_RCVTIMEO with a small timeout — used right before close so the
+ * drain loop cannot block module_stop indefinitely on a stale link. */
+static void set_short_recv_timeout(int fd) {
+    struct {
+        unsigned int sec;
+        unsigned int usec;
+    } tv = { 0, 200 * 1000 };
+    sceNetSetsockopt(fd, SCE_NET_SOL_SOCKET, SCE_NET_SO_RCVTIMEO, &tv, sizeof tv);
+}
+
 struct mqtt_socket { int fd; };
 
 mqtt_socket *mqtt_socket_open(const char *host, uint16_t port) {
@@ -37,6 +47,7 @@ int mqtt_socket_recv(mqtt_socket *s, uint8_t *buf, size_t cap) {
 
 void mqtt_socket_close(mqtt_socket *s) {
     if (!s) return;
+    set_short_recv_timeout(s->fd);
     uint8_t drain[64];
     while (sceNetRecv(s->fd, drain, sizeof drain, 0) > 0) {}
     sceNetSocketClose(s->fd);

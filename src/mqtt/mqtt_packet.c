@@ -109,8 +109,12 @@ int mqtt_build_connect(uint8_t *out, size_t cap,
 
     int n;
     n = put_string(out + pos, client_id, cap, pos); if (n < 0) return -1; pos += n;
-    if (will_topic)   { n = put_string(out + pos, will_topic, cap, pos);   if (n < 0) return -1; pos += n; }
-    if (will_payload) { n = put_string(out + pos, will_payload, cap, pos); if (n < 0) return -1; pos += n; }
+    /* Will topic and payload must be written together — partial fields
+     * would misalign the payload section against the Will flag. */
+    if (will_topic && will_payload) {
+        n = put_string(out + pos, will_topic,   cap, pos); if (n < 0) return -1; pos += n;
+        n = put_string(out + pos, will_payload, cap, pos); if (n < 0) return -1; pos += n;
+    }
     if (username)     { n = put_string(out + pos, username, cap, pos);     if (n < 0) return -1; pos += n; }
     if (password)     { n = put_string(out + pos, password, cap, pos);     if (n < 0) return -1; pos += n; }
 
