@@ -1,0 +1,15 @@
+#include "collectors.h"
+#include <psp2kern/power.h>
+
+int collector_battery(battery_state *out) {
+    int pct  = kscePowerGetBatteryLifePercent();
+    int chg  = kscePowerIsBatteryCharging();
+    int tmpx = kscePowerGetBatteryTemp();     /* deci-Celsius */
+    int rem  = kscePowerGetBatteryLifeTime();
+
+    out->level_pct         = pct  >= 0 ? pct  : -1;
+    out->charging          = chg  >= 0 ? chg  : -1;
+    out->temp_celsius_x10  = tmpx >= 0 ? tmpx : -1;
+    out->remaining_minutes = rem  >= 0 ? rem  : -1;
+    return 0;
+}
