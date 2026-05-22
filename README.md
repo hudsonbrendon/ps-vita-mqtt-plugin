@@ -1,21 +1,43 @@
+<p align="center">
+  <a href="https://www.home-assistant.io/integrations/mqtt/"><img alt="Home Assistant" src="https://img.shields.io/badge/Home%20Assistant-MQTT-41bdf5?style=for-the-badge"></a>
+  <a href="https://henkaku.xyz/"><img alt="PS Vita" src="https://img.shields.io/badge/PS%20Vita-HENkaku-003791?style=for-the-badge"></a>
+</p>
+
 # ps-vita-mqtt-plugin
 
-taiHEN user plugin for jailbroken PS Vita (HENkaku Enso on FW 3.60, or
-h-encore²/Enso on FW 3.65–3.74) that publishes console telemetry to an
-MQTT broker. Home Assistant auto-creates the sensors via MQTT
-Discovery.
+taiHEN user plugin (`.suprx`) for a jailbroken PS Vita that publishes
+console telemetry to an MQTT broker. Home Assistant auto-creates the
+sensors via MQTT Discovery.
 
-The plugin is loaded into the **SceShell** process under taiHEN's
-`*main` section. It runs whenever you are in the LiveArea, pauses while
-a game is in foreground, and resumes when you return to the menu.
+Verified working on **FW 3.74 / HENkaku** (PCH-1000), publishing 15
+sensors as a single Home Assistant device.
+
+Tested live: battery level/charging state/temperature, WiFi SSID/RSSI/
+IP, firmware/model, plugin uptime, network link, availability with LWT.
+
+## How it works
+
+The plugin loads into the **SceShell** process via taiHEN's `*main`
+section. On boot, `module_start` returns immediately, spawning a worker
+thread that waits 5 seconds (so SceShell can finish its own startup)
+and then:
+
+1. Loads `ux0:/data/ps-vita-mqtt/config.json`.
+2. Publishes Home Assistant MQTT Discovery configs for every sensor
+   (retained).
+3. Loops: collect → publish → sleep → ping.
+
+Plain TCP, no TLS, QoS 0. Hand-rolled minimal MQTT 3.1.1 client — no
+library dependencies, no libc heap. Last Will & Testament keeps the HA
+availability accurate when the Vita sleeps or the plugin stops.
 
 ## Requirements
 
-- PS Vita (PCH-1000 / PCH-2000) or PSTV with HENkaku Enso (FW 3.60) or
-  h-encore² (FW 3.65–3.74)
-- A reachable MQTT broker (Mosquitto recommended) on the same LAN, port 1883
+- PS Vita (PCH-1000 / PCH-2000) or PSTV
+- HENkaku Enso (FW 3.60) or h-encore² (FW 3.65 – 3.74)
+- Reachable MQTT broker on the same LAN, port 1883 (Mosquitto recommended)
 - Home Assistant with the MQTT integration enabled
-- VitaShell or any FTP client to copy files to the Vita
+- VitaShell on the Vita with the FTP server enabled (`SELECT`)
 
 ## Build
 
@@ -24,109 +46,166 @@ a game is in foreground, and resumes when you return to the menu.
 # produces build/ps-vita-mqtt.suprx
 ```
 
-First run downloads the VitaSDK Docker image (`vitasdk/vitasdk:latest`,
-linux/amd64). Subsequent builds are fast.
+First run downloads the VitaSDK Docker image (~1.5 GB,
+`vitasdk/vitasdk:latest`, linux/amd64 — works on Apple Silicon via QEMU).
+Subsequent builds are fast.
 
 ## Install on the Vita
 
-1. **Copy the plugin and config to `ux0:`** (VitaShell's FTP server is
-   on port 1337; USB mode also works):
+Pre-built binaries are attached to every GitHub release. To install:
+
+1. **Copy the plugin and config to the Vita** over FTP (VitaShell uses
+   port 1337):
 
    ```text
-   ux0:tai/ps-vita-mqtt.suprx
+   ur0:tai/ps-vita-mqtt.suprx
    ux0:data/ps-vita-mqtt/config.json
    ```
 
-   Use `config.example.json` as the template. Fill in your broker
-   IP, port, and a unique `client_id`.
+   Use [`config.example.json`](./config.example.json) as the template.
+   Fill in your broker IP, port, credentials, and a unique `client_id`.
 
-2. **Register the plugin in `ux0:tai/config.txt`** under the `*main`
-   section (so it loads into SceShell):
+   Example:
+
+   ```bash
+   VITA_IP=192.168.1.50
+
+   curl -T ps-vita-mqtt.suprx \
+     ftp://$VITA_IP:1337/ur0:/tai/ps-vita-mqtt.suprx
+   curl -T config.json \
+     ftp://$VITA_IP:1337/ux0:/data/ps-vita-mqtt/config.json
+   ```
+
+2. **Register the plugin in taiHEN config**. The plugin must be listed
+   under the `*main` section so it loads into SceShell. Open
+   `ux0:tai/config.txt` (or `ur0:tai/config.txt` if `ux0:` doesn't exist)
+   and add:
 
    ```text
    *main
-   ux0:tai/ps-vita-mqtt.suprx
+   ur0:tai/ps-vita-mqtt.suprx
    ```
 
-3. **Reload taiHEN** (in HENkaku Settings) **or reboot the Vita**. The
-   plugin starts when SceShell launches and begins publishing.
+3. **Reboot the Vita** (HENkaku Settings → *Reload taiHEN* is not enough
+   for user plugins — SceShell needs to be restarted).
+
+4. Within ~5 s of boot, the broker receives ~15 retained discovery
+   topics and the HA UI gets a new device named **PS Vita**.
 
 ## Available sensors
 
-A single Home Assistant device named **PS Vita** (or whatever
-`device_name` is set to) is auto-created via MQTT Discovery on each
-(re)connect.
+All sensors appear under a single HA device. `<id>` is `client_id` from
+`config.json`.
 
 | Sensor | Topic | Unit |
 |---|---|---|
 | Battery level | `psvita/<id>/battery/level` | % |
-| Battery charging | `psvita/<id>/battery/charging` | on/off |
+| Battery charging | `psvita/<id>/battery/charging` | ON / OFF |
 | Battery temperature | `psvita/<id>/battery/temp` | °C |
 | Battery remaining | `psvita/<id>/battery/minutes` | min |
 | Firmware | `psvita/<id>/system/firmware` | — |
 | Model | `psvita/<id>/system/model` | — |
 | System uptime (process) | `psvita/<id>/system/uptime` | s |
 | Plugin uptime | `psvita/<id>/plugin/uptime` | s |
-| In game (any app running) | `psvita/<id>/app/in_game` | on/off |
-| Title ID | `psvita/<id>/app/title_id` | — (best-effort) |
-| Game name | `psvita/<id>/app/game_name` | — (best-effort) |
-| Network link | `psvita/<id>/net/link` | on/off |
+| In game | `psvita/<id>/app/in_game` | ON / OFF |
+| Title ID | `psvita/<id>/app/title_id` | — *(stub, see Limitations)* |
+| Game name | `psvita/<id>/app/game_name` | — *(stub)* |
+| Network link | `psvita/<id>/net/link` | ON / OFF |
 | IP | `psvita/<id>/net/ip` | — |
 | SSID | `psvita/<id>/net/ssid` | — |
 | WiFi RSSI | `psvita/<id>/net/rssi` | dBm |
 | Availability (LWT) | `psvita/<id>/availability` | online / offline |
 
-`<id>` is `client_id` from `config.json`.
-
-The optional title-name lookup reads
-`ux0:data/ps-vita-mqtt/titles.txt`. Format is one CSV line per app:
-
-```text
-PCSE00001,Game Name
-```
-
 ## Limitations
 
-- No TLS — broker must be on a trusted LAN.
-- No HA → Vita commands (reboot/launch/shutdown). Publish-only.
-- No on-screen overlay / popup notifications.
-- No live screen streaming.
-- The plugin lives inside SceShell, so sensors do **not** update while
-  a game is in foreground — they refresh as soon as you return to
-  LiveArea. The `offline` LWT fires after the keepalive window
-  (default 60 s).
-- `app/title_id` and `app/game_name` are **best-effort**. Determining
-  the foreground app's TitleID from the SceShell user-mode context
-  requires taiHEN-side hooks that are out of MVP scope. Today only
-  the `in_game` boolean is reliably populated.
-- `system/uptime` reports SceShell process time, not absolute system
-  uptime (resolving that needs `sceRtcGetCurrentTick` + boot-time
-  delta; deferred).
+- **No TLS** — broker must be on a trusted LAN.
+- **No HA → Vita commands** (reboot/launch/shutdown). Publish-only.
+- **No on-screen overlay** notifications.
+- **No screen streaming**.
+- The plugin lives inside **SceShell**, so sensors do not refresh while
+  a game is in the foreground. They resume when you return to LiveArea.
+  The `offline` LWT fires after the broker's keepalive window
+  (60 s).
+- `app/title_id` and `app/game_name` are **stubs**. Resolving the
+  foreground game's TitleID from SceShell context requires taiHEN
+  hooks into shell internals that are out of MVP scope. Today only the
+  `in_game` boolean (which works) plus the stub fields are exposed.
+- `system/uptime` reports the SceShell process time, not absolute system
+  uptime.
+
+## Recovery — if a bad build bricks the boot
+
+If a buggy plugin makes SceShell crash on boot and the Vita gets stuck
+on the Sony logo:
+
+1. Power-off the Vita (hold power 30 s).
+2. Remove the SD2VITA / microSD card and put it in a PC.
+3. Open `tai/config.txt` on the card (i.e. `ux0:/tai/config.txt`).
+   - If the file does not exist, create it with just the recovery
+     baseline (see [`recovery/config.txt`](./recovery/config.txt) in
+     this repo).
+   - If it exists, **delete** the line `ur0:tai/ps-vita-mqtt.suprx`.
+4. Put the card back, boot the Vita normally. `ux0:/tai/config.txt`
+   takes precedence over `ur0:/tai/config.txt`, so taiHEN will skip the
+   bad plugin.
 
 ## Architecture
 
-- C99, single user thread
+- C99, one user thread
 - Custom minimal MQTT 3.1.1 publisher (CONNECT, PUBLISH, PINGREQ,
   DISCONNECT — no SUBSCRIBE, QoS 0, no TLS)
 - HA Discovery configs published once on every (re)connect, retained
-- Last Will & Testament keeps HA availability accurate when the plugin
-  is paused, the Vita sleeps, or the network drops
+- LWT keeps HA availability accurate when the plugin pauses
+
+### Why a user plugin, not a kernel plugin
+
+The original plan was a kernel `.skprx`, but VitaSDK's kernel headers
+expose so few of the user-facing APIs (no `ksceNetCtl*`, no foreground
+PID, no TitleID lookup) that a kernel-only build would mean a battery-
+only MVP. The user `.suprx` route gives full `scePower*`, `sceNet*`,
+`sceNetCtl*`, and `sceAppMgr*` access at the cost of pausing during
+games.
+
+### Why weak SCE stubs
+
+Most plugins link against `-lScexxx_stub`. We link against
+`-lScexxx_stub_weak` instead. With strong stubs, the entire plugin is
+rejected at load time if even one imported NID cannot be resolved in
+the SceShell context — silently, with no log. Weak stubs defer
+resolution to first use, so the plugin loads even if a few exotic
+imports stay null, and we get diagnostic logs from the symbols we
+actually call.
+
+### Why no SceLibc
+
+Plugins loaded with `-nostartfiles` (which we must use — there is no
+`main`, only `module_start`) never run newlib's heap initialization.
+Linking `-lSceLibc_stub` causes a load-time crash because the libc
+heap stays uninitialized. We replace libc with:
+
+- `sceClibSnprintf` / `sceClibVsnprintf` (in `SceLibKernel`) instead of
+  `snprintf` / `vsnprintf`
+- Static buffers + a fixed-size bump pool for `cJSON_InitHooks`
+- A no-op stub for `_free_vita_newlib` (the only newlib symbol that
+  pulls in the missing SceLibc heap path)
 
 ## Layout
 
 ```
 src/
-├── main.c                       # module_start / module_stop
+├── main.c                       # module_start spawns the worker thread
 ├── log.h, log_vita.c, log_host.c
 ├── config.h, config.c, config_vita.c
-├── publisher.h, publisher.c     # worker loop (connect → discovery → state → sleep → ping)
+├── publisher.h, publisher.c     # connect → discovery → state → sleep → ping
 ├── mqtt/mqtt_packet.c, mqtt_client.c, mqtt_socket_vita.c, mqtt_socket_host.c
-├── ha/ha_discovery.c            # HA MQTT Discovery payloads
-└── collectors/                  # per-sensor-group, _vita.c + _host.c pairs
+├── ha/ha_discovery.c            # MQTT Discovery payloads
+├── collectors/                  # per-sensor-group, _vita.c + _host.c pairs
+├── sce_libc_shim.h              # redirects snprintf to sceClibSnprintf on the Vita build
+└── vita_newlib_stubs.c          # stubs the newlib heap path we don't use
 ```
 
 Every Vita-targeted module ships with a host stub used by the unit
-tests, so the publisher, packet encoder, config parser and Discovery
+tests, so the publisher, packet encoder, config parser, and Discovery
 payload builders all run on the developer's laptop without a Vita.
 
 ## Host tests
@@ -139,6 +218,14 @@ Compiles and runs `tests/test_*` against the host stubs. The
 integration test against Mosquitto in Docker lives at
 `tests/integration/run_integration.sh`.
 
+## Roadmap
+
+- Foreground TitleID detection (taiHEN hook on `sceShellUtilLaunchAppByUri`
+  or similar)
+- HA → Vita commands (reboot / standby) via MQTT SUBSCRIBE
+- In-game popup notifications via a companion `.suprx` injected with `*ALL`
+- TLS support (mbedTLS port)
+
 ## License
 
-TBD
+MIT — see [`LICENSE`](./LICENSE).

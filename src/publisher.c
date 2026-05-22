@@ -3,6 +3,7 @@
 #include "ha/ha_discovery.h"
 #include "collectors/collectors.h"
 #include "log.h"
+#include "sce_libc_shim.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -78,7 +79,9 @@ static int publish_state(mqtt_client *cli, const ha_ctx *ctx,
 
     PUB("battery/level",    "%d", b.level_pct);
     PUB("battery/charging", "%s", b.charging > 0 ? "ON" : "OFF");
-    PUB("battery/temp",     "%d.%d", b.temp_celsius_x10/10, b.temp_celsius_x10 % 10);
+    /* scePowerGetBatteryTemp returns hundredths of a degree Celsius
+     * (verified on real hardware: 3044 = 30.44 °C). */
+    PUB("battery/temp",     "%d.%d", b.temp_celsius_x10/100, (b.temp_celsius_x10/10) % 10);
     PUB("battery/minutes",  "%d", b.remaining_minutes);
     PUB("system/firmware",  "%s", s.firmware);
     PUB("system/model",     "%s", s.model);
@@ -130,6 +133,7 @@ int publisher_publish_once(const mqtt_config *cfg) {
 }
 
 void publisher_run(const mqtt_config *cfg, volatile int *stop_flag) {
+    LOGF("publisher_run: enter");
     ha_ctx ctx = {
         .discovery_prefix = cfg->discovery_prefix,
         .topic_prefix     = cfg->topic_prefix,
@@ -141,9 +145,10 @@ void publisher_run(const mqtt_config *cfg, volatile int *stop_flag) {
              cfg->topic_prefix, cfg->client_id);
 
     unsigned backoff = 1;
-    uint64_t plugin_started_at = 0; /* fill from system uptime later */
+    uint64_t plugin_started_at = 0;
 
     while (!*stop_flag) {
+        LOGF("publisher: connecting to %s:%u", cfg->broker_host, cfg->broker_port);
         mqtt_client_config mc = {
             .host = cfg->broker_host, .port = cfg->broker_port,
             .client_id = cfg->client_id,
@@ -160,16 +165,26 @@ void publisher_run(const mqtt_config *cfg, volatile int *stop_flag) {
             if (backoff < 60) backoff *= 2;
             continue;
         }
+        LOGF("publisher: CONNECTED");
         backoff = 1;
         if (publish_discovery(cli, &ctx) < 0) {
+            LOGE("publish_discovery failed");
             mqtt_client_close(cli);
             continue;
         }
+        LOGF("publisher: discovery published");
         while (!*stop_flag) {
-            if (publish_state(cli, &ctx, plugin_started_at) < 0) break;
+            if (publish_state(cli, &ctx, plugin_started_at) < 0) {
+                LOGE("publish_state failed");
+                break;
+            }
             sleep_seconds(cfg->poll_interval_sec);
-            if (mqtt_client_ping(cli) < 0) break;
+            if (mqtt_client_ping(cli) < 0) {
+                LOGE("ping failed");
+                break;
+            }
         }
         mqtt_client_close(cli);
     }
+    LOGF("publisher_run: exit");
 }

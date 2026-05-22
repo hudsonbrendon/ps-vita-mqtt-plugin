@@ -1,4 +1,5 @@
 #include "ha_discovery.h"
+#include "../sce_libc_shim.h"
 #include <stdio.h>
 #include <string.h>
 

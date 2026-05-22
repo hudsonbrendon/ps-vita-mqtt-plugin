@@ -1,8 +1,8 @@
 #include "collectors.h"
+#include "../sce_libc_shim.h"
 #include <psp2/kernel/modulemgr.h>
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/sysmem.h>
-#include <stdio.h>
 #include <string.h>
 
 /* Local shim that matches Sony's SceKernelSystemSwVersion layout.

@@ -11,3 +11,7 @@ build/
 .idea/
 host-tests
 *.dSYM/
+
+# Real config — kept local, never committed. Use config.example.json
+# as the template.
+config.json

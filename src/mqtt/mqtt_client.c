@@ -2,12 +2,31 @@
 #include "mqtt_packet.h"
 #include "mqtt_socket.h"
 #include "../log.h"
-#include <stdlib.h>
 #include <string.h>
 
-struct mqtt_client {
-    mqtt_socket *sock;
-};
+#ifdef PSVITA_BUILD
+  /* Static buffers — plugin has 1 client at a time, no heap. */
+  struct mqtt_client { mqtt_socket *sock; int in_use; };
+  static struct mqtt_client g_client = { 0, 0 };
+  static uint8_t g_pub_buf[4096];
+  static inline struct mqtt_client *client_alloc(void) {
+      if (g_client.in_use) return 0;
+      g_client.in_use = 1;
+      return &g_client;
+  }
+  static inline void client_free(struct mqtt_client *c) {
+      if (c) { c->sock = 0; c->in_use = 0; }
+  }
+  #define PUB_BUF      g_pub_buf
+  #define PUB_BUF_CAP  sizeof(g_pub_buf)
+#else
+  #include <stdlib.h>
+  struct mqtt_client { mqtt_socket *sock; };
+  static inline struct mqtt_client *client_alloc(void) {
+      return (struct mqtt_client *)malloc(sizeof(struct mqtt_client));
+  }
+  static inline void client_free(struct mqtt_client *c) { free(c); }
+#endif
 
 #define BUF 1024
 
@@ -29,11 +48,6 @@ mqtt_client *mqtt_client_open(const mqtt_client_config *cfg) {
         return NULL;
     }
 
-    /* Read CONNACK: expect exactly 4 bytes:
-     *   ack[0] = 0x20 (CONNACK type),
-     *   ack[1] = 0x02 (remaining length),
-     *   ack[2] = session-present byte, only bit 0 may be set,
-     *   ack[3] = return code, 0x00 = accepted. */
     uint8_t ack[4];
     int got = mqtt_socket_recv(s, ack, sizeof ack);
     if (got != 4 || ack[0] != 0x20 || ack[1] != 0x02
@@ -44,7 +58,8 @@ mqtt_client *mqtt_client_open(const mqtt_client_config *cfg) {
         return NULL;
     }
 
-    mqtt_client *c = malloc(sizeof *c);
+    mqtt_client *c = client_alloc();
+    if (!c) { mqtt_socket_close(s); return NULL; }
     c->sock = s;
     return c;
 }
@@ -52,16 +67,22 @@ mqtt_client *mqtt_client_open(const mqtt_client_config *cfg) {
 int mqtt_client_publish(mqtt_client *c, const char *topic,
                         const uint8_t *payload, size_t len, int retain) {
     if (!c) return -1;
-    /* Topic+payload can be larger than 1 KB for HA Discovery configs.
-     * Allocate dynamically up to 8 KB. */
+#ifdef PSVITA_BUILD
     size_t need = strlen(topic) + len + 64;
-    uint8_t *buf = malloc(need);
+    if (need > PUB_BUF_CAP) return -1;
+    int n = mqtt_build_publish(PUB_BUF, PUB_BUF_CAP, topic, payload, len, retain);
+    if (n < 0) return -1;
+    return mqtt_socket_send(c->sock, PUB_BUF, n) == n ? 0 : -1;
+#else
+    size_t need = strlen(topic) + len + 64;
+    uint8_t *buf = (uint8_t *)malloc(need);
     if (!buf) return -1;
     int n = mqtt_build_publish(buf, need, topic, payload, len, retain);
     if (n < 0) { free(buf); return -1; }
     int sent = mqtt_socket_send(c->sock, buf, n);
     free(buf);
     return sent == n ? 0 : -1;
+#endif
 }
 
 int mqtt_client_ping(mqtt_client *c) {
@@ -77,5 +98,5 @@ void mqtt_client_close(mqtt_client *c) {
     int n = mqtt_build_disconnect(buf, sizeof buf);
     (void)mqtt_socket_send(c->sock, buf, n);
     mqtt_socket_close(c->sock);
-    free(c);
+    client_free(c);
 }

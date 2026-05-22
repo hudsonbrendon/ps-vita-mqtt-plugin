@@ -1,0 +1,29 @@
+# Recovery taiHEN config — place this at ux0:/tai/config.txt on the
+# SD2VITA / microSD card when the plugin makes the Vita hang on the
+# Sony logo. ux0:/tai/config.txt takes precedence over ur0:/tai/config.txt,
+# so this skips the bad plugin on next boot.
+#
+# Adjust the kernel plugin list to match your install — the entries
+# below are taken from a stock HENkaku Enso / NoNpDrm setup.
+
+*KERNEL
+ur0:tai/0syscall6.skprx
+ur0:tai/nonpdrm.skprx
+ur0:tai/repatch.skprx
+ur0:tai/itls.skprx
+ur0:tai/yamt_helper.skprx
+ur0:tai/psvshell.skprx
+ur0:tai/nopowerlimits.skprx
+ur0:tai/kubridge.skprx
+
+*NPXS10015
+ur0:tai/yamt.suprx
+ur0:tai/henkaku.suprx
+
+*main
+ur0:tai/henkaku.suprx
+ur0:tai/shellbat.suprx
+ur0:tai/pngshot.suprx
+
+*NPXS10016
+ur0:tai/henkaku.suprx

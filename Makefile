@@ -1,6 +1,7 @@
 TARGET := ps-vita-mqtt
 OBJS_VITA := \
     src/main.o \
+    src/vita_newlib_stubs.o \
     src/log_vita.o \
     src/config.o \
     src/config_vita.o \
@@ -18,14 +19,13 @@ OBJS_VITA := \
 PREFIX  := arm-vita-eabi
 CC      := $(PREFIX)-gcc
 CFLAGS  := -Wl,-q -Wall -O2 -nostartfiles -DPSVITA_BUILD -I. -Isrc
-LIBS    := -lScePower_stub \
-           -lSceNet_stub -lSceNetCtl_stub \
-           -lSceAppMgr_stub \
-           -lSceKernelThreadMgr_stub \
-           -lSceKernelModulemgr_stub \
-           -lSceLibc_stub \
-           -lSceIofilemgr_stub \
-           -lSceSysmem_stub
+LIBS    := -lScePower_stub_weak \
+           -lSceNet_stub_weak -lSceNetCtl_stub_weak \
+           -lSceKernelThreadMgr_stub_weak \
+           -lSceKernelModulemgr_stub_weak \
+           -lSceLibKernel_stub_weak \
+           -lSceIofilemgr_stub_weak \
+           -lSceSysmem_stub_weak
 
 .PHONY: suprx clean host-tests
 
