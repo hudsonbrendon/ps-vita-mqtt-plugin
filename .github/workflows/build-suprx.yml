@@ -36,21 +36,24 @@ jobs:
     container: vitasdk/vitasdk:latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build .suprx
+      - name: Build main + companion .suprx
         run: |
           apk add --no-cache make bash
-          make suprx
-      - name: Upload build artifact
+          make all
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ps-vita-mqtt.suprx
-          path: build/ps-vita-mqtt.suprx
+          name: ps-vita-mqtt-build
+          path: |
+            build/ps-vita-mqtt.suprx
+            build/ps-vita-mqtt-tag.suprx
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
             build/ps-vita-mqtt.suprx
+            build/ps-vita-mqtt-tag.suprx
             config.example.json
             recovery/config.txt
           generate_release_notes: true
