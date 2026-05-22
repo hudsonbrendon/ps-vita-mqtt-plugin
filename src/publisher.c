@@ -88,11 +88,14 @@ static int publish_state(mqtt_client *cli, const ha_ctx *ctx,
     PUB("system/uptime",    "%llu", (unsigned long long)s.system_uptime_sec);
     PUB("plugin/uptime",    "%llu", (unsigned long long)s.plugin_uptime_sec);
     PUB("app/in_game",      "%s", a.in_game ? "ON" : "OFF");
-    PUB("app/title_id",     "%s", a.title_id);
-    PUB("app/game_name",    "%s", a.game_name);
+    /* sceClibSnprintf("%s", "") prints the literal "(null)" on the
+     * Vita SDK we use; pass a placeholder dash for empty fields so
+     * Home Assistant doesn't show "(null)" as the entity value. */
+    PUB("app/title_id",     "%s", a.title_id[0]  ? a.title_id  : "-");
+    PUB("app/game_name",    "%s", a.game_name[0] ? a.game_name : "-");
     PUB("net/link",         "%s", n.link_up ? "ON" : "OFF");
-    PUB("net/ip",           "%s", n.ip);
-    PUB("net/ssid",         "%s", n.ssid);
+    PUB("net/ip",           "%s", n.ip[0]   ? n.ip   : "-");
+    PUB("net/ssid",         "%s", n.ssid[0] ? n.ssid : "-");
     PUB("net/rssi",         "%d", n.rssi_dbm);
 
     /* Availability comes last so HA flips entities to "available" only

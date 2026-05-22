@@ -69,10 +69,13 @@ int mqtt_client_publish(mqtt_client *c, const char *topic,
     if (!c) return -1;
 #ifdef PSVITA_BUILD
     size_t need = strlen(topic) + len + 64;
-    if (need > PUB_BUF_CAP) return -1;
+    if (need > PUB_BUF_CAP) { LOGE("publish buf too small: %u > %u",
+                                   (unsigned)need, (unsigned)PUB_BUF_CAP); return -1; }
     int n = mqtt_build_publish(PUB_BUF, PUB_BUF_CAP, topic, payload, len, retain);
-    if (n < 0) return -1;
-    return mqtt_socket_send(c->sock, PUB_BUF, n) == n ? 0 : -1;
+    if (n < 0) { LOGE("publish build failed for topic=%s", topic); return -1; }
+    int sent = mqtt_socket_send(c->sock, PUB_BUF, n);
+    if (sent != n) { LOGE("publish send short: %d/%d topic=%s", sent, n, topic); return -1; }
+    return 0;
 #else
     size_t need = strlen(topic) + len + 64;
     uint8_t *buf = (uint8_t *)malloc(need);
@@ -90,6 +93,10 @@ int mqtt_client_ping(mqtt_client *c) {
     uint8_t buf[2];
     int n = mqtt_build_pingreq(buf, sizeof buf);
     return mqtt_socket_send(c->sock, buf, n) == n ? 0 : -1;
+    /* TODO: drain PINGRESP without blocking. SO_RCVTIMEO took an
+     * unexpected struct shape on this Vita SDK and broke CONNACK,
+     * so for now we just send PINGREQ and rely on the broker's idle
+     * timeout being generous. See issue #3. */
 }
 
 void mqtt_client_close(mqtt_client *c) {
