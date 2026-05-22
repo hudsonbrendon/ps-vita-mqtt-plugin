@@ -25,7 +25,8 @@ LIBS    := -lScePower_stub_weak \
            -lSceKernelModulemgr_stub_weak \
            -lSceLibKernel_stub_weak \
            -lSceIofilemgr_stub_weak \
-           -lSceSysmem_stub_weak
+           -lSceSysmem_stub_weak \
+           -ltaihen_stub_weak
 
 .PHONY: suprx companion clean host-tests all
 
