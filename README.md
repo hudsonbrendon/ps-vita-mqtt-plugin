@@ -126,10 +126,15 @@ All sensors appear under a single HA device. `<id>` is `client_id` from
   a game is in the foreground. They resume when you return to LiveArea.
   The `offline` LWT fires after the broker's keepalive window
   (60 s).
-- `app/title_id` and `app/game_name` are **stubs**. Resolving the
-  foreground game's TitleID from SceShell context requires taiHEN
-  hooks into shell internals that are out of MVP scope. Today only the
-  `in_game` boolean (which works) plus the stub fields are exposed.
+- `app/title_id` and `app/game_name` show `-` by default. Resolving the
+  foreground game's TitleID from SceShell context is non-trivial:
+  taiHEN's `*ALL` and `*<TITLEID>` plugin-injection sections do **not**
+  load user plugins into signed commercial Vita game processes on the
+  firmware we tested. See [issue #1](../../issues/1) for the experiment
+  log and the planned `sceAppMgrLaunchAppByUri` hook approach.
+- `in_game` only flips while a process is detected (via the optional
+  `src/companion/` plugin, disabled by default — see "Optional companion
+  plugin" below). With the default config, `in_game` stays `OFF`.
 - `system/uptime` reports the SceShell process time, not absolute system
   uptime.
 
@@ -217,6 +222,29 @@ make host-tests
 Compiles and runs `tests/test_*` against the host stubs. The
 integration test against Mosquitto in Docker lives at
 `tests/integration/run_integration.sh`.
+
+## Optional companion plugin (experimental)
+
+A second tiny `.suprx`, `ps-vita-mqtt-tag.suprx`, lives under
+`src/companion/`. When loaded into any user process, it reads the
+current process TitleID and writes it to
+`ux0:/data/ps-vita-mqtt/current_title.txt`. The main plugin reads that
+file each poll cycle.
+
+It works fine in homebrew apps (VitaShell, etc.) but **does not load
+into commercial Vita game processes** on FW 3.74 — taiHEN's `*ALL`
+section and explicit `*<TITLEID>` sections both fail silently for
+signed games. See [issue #1](../../issues/1) for the experiment.
+
+If you still want to enable it (works for homebrew / non-signed apps):
+
+```text
+# add to ux0:/tai/config.txt (or ur0:/tai/config.txt)
+*ALL
+ur0:tai/ps-vita-mqtt-tag.suprx
+```
+
+And copy `build/ps-vita-mqtt-tag.suprx` to `ur0:tai/`.
 
 ## Roadmap
 

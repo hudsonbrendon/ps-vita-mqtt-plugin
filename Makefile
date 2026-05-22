@@ -27,9 +27,31 @@ LIBS    := -lScePower_stub_weak \
            -lSceIofilemgr_stub_weak \
            -lSceSysmem_stub_weak
 
-.PHONY: suprx clean host-tests
+.PHONY: suprx companion clean host-tests all
+
+all: suprx companion
 
 suprx: build/$(TARGET).suprx
+
+# Companion plugin loaded into *ALL (every process) so it can write
+# the running app's TitleID to a shared file the publisher reads.
+COMPANION_TARGET := ps-vita-mqtt-tag
+COMPANION_LIBS   := -lSceAppMgr_stub_weak \
+                    -lSceIofilemgr_stub_weak \
+                    -lSceLibKernel_stub_weak \
+                    -lSceKernelModulemgr_stub_weak
+
+companion: build/$(COMPANION_TARGET).suprx
+
+build/$(COMPANION_TARGET).elf: src/companion/companion_main.o
+	@mkdir -p build
+	$(CC) $(CFLAGS) $^ $(COMPANION_LIBS) -o $@
+
+build/$(COMPANION_TARGET).velf: build/$(COMPANION_TARGET).elf
+	vita-elf-create -e src/companion/exports.yml $< $@
+
+build/$(COMPANION_TARGET).suprx: build/$(COMPANION_TARGET).velf
+	vita-make-fself -c $< $@
 
 build/$(TARGET).velf: $(OBJS_VITA)
 	@mkdir -p build
@@ -43,7 +65,7 @@ build/$(TARGET).suprx: build/$(TARGET).velf
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf build $(OBJS_VITA) host-tests
+	rm -rf build $(OBJS_VITA) src/companion/companion_main.o host-tests
 
 # ---- host-side unit tests --------------------------------------------------
 HOST_CC := cc
